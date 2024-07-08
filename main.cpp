@@ -3,12 +3,14 @@
 #include <vector>
 #include <unordered_map>
 #include <map>
+#include <set>
+#include <stack>
 #include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <iomanip>
-#include <set>
+#include <stdexcept>
 
 using namespace std;
 
@@ -34,34 +36,19 @@ public:
 class Plataforma {
 private:
     vector<shared_ptr<Pelicula>> peliculas;
-    unordered_map<string, vector<shared_ptr<Pelicula>>> peliculasPorTitulo;
+    map<string, shared_ptr<Pelicula>> peliculasPorTitulo;
+    map<string, shared_ptr<Pelicula>> peliculasPorSinopsis;
     multimap<string, shared_ptr<Pelicula>> peliculasPorTag;
     vector<shared_ptr<Pelicula>> verMasTarde;
     vector<shared_ptr<Pelicula>> likes;
-
-    // Función privada para mostrar las películas con paginación
-    void mostrarPeliculas(const vector<shared_ptr<Pelicula>>& pelis, int start = 0, int count = 5) const {
-        int end = min(start + count, static_cast<int>(pelis.size()));
-        for (int i = start; i < end; ++i) {
-            cout << setw(3) << i + 1 << ". " << pelis[i]->getTitulo() << endl;
-        }
-        if (end < static_cast<int>(pelis.size())) {
-            cout << "Más resultados disponibles. Ingresa 'm' para ver más o 'q' para salir: ";
-            string input;
-            cin.ignore();
-            getline(cin, input);
-            if (input == "m") {
-                mostrarPeliculas(pelis, start + count, count);
-            }
-        }
-    }
+    stack<vector<shared_ptr<Pelicula>>> paginacion;
 
 public:
     // Función para cargar las películas desde un archivo CSV
     void cargarPeliculas(const string& archivo) {
         ifstream file(archivo);
         if (!file.is_open()) {
-            cerr << "No se pudo abrir el archivo " << archivo << endl;
+            cerr << "No se pudo abrir el archivo " << archivo << ". Verifique que la ruta sea correcta y que el archivo exista." << endl;
             return;
         }
 
@@ -83,54 +70,64 @@ public:
 
             auto pelicula = make_shared<Pelicula>(imdb_id, titulo, sinopsis, tags);
             peliculas.push_back(pelicula);
-            peliculasPorTitulo[titulo].push_back(pelicula);
+            peliculasPorTitulo[titulo] = pelicula;
+            peliculasPorSinopsis[sinopsis] = pelicula;
             for (const auto& t : tags) {
                 peliculasPorTag.insert({t, pelicula});
             }
         }
         file.close();
+        cout << "Películas cargadas correctamente desde " << archivo << endl;
     }
 
     // Función para buscar películas por título o sinopsis
-    void buscarPorPalabraOFrase(const string& palabra) {
+    vector<shared_ptr<Pelicula>> buscarPorPalabraOFrase(const string& palabra) {
         vector<shared_ptr<Pelicula>> resultados;
-        string palabraLower = palabra;
-        transform(palabraLower.begin(), palabraLower.end(), palabraLower.begin(), ::tolower);
 
-        for (const auto& p : peliculas) {
-            string tituloLower = p->getTitulo();
-            string sinopsisLower = p->getSinopsis();
-            transform(tituloLower.begin(), tituloLower.end(), tituloLower.begin(), ::tolower);
-            transform(sinopsisLower.begin(), sinopsisLower.end(), sinopsisLower.begin(), ::tolower);
-
-            if (tituloLower.find(palabraLower) != string::npos || sinopsisLower.find(palabraLower) != string::npos) {
-                resultados.push_back(p);
+        for (const auto& [key, pelicula] : peliculasPorTitulo) {
+            if (key.find(palabra) != string::npos) {
+                resultados.push_back(pelicula);
             }
         }
-        cout << "Resultados de la búsqueda (" << resultados.size() << " encontrados):" << endl;
-        mostrarPeliculas(resultados);
+
+        for (const auto& [key, pelicula] : peliculasPorSinopsis) {
+            if (key.find(palabra) != string::npos && find(resultados.begin(), resultados.end(), pelicula) == resultados.end()) {
+                resultados.push_back(pelicula);
+            }
+        }
+
+        paginacion.push(resultados);
+        return resultados;
     }
 
     // Función para buscar películas por etiqueta (tag)
-    void buscarPorTag(const string& tag) {
+    vector<shared_ptr<Pelicula>> buscarPorTag(const string& tag) {
         auto range = peliculasPorTag.equal_range(tag);
         vector<shared_ptr<Pelicula>> resultados;
+
         for (auto it = range.first; it != range.second; ++it) {
             resultados.push_back(it->second);
         }
-        cout << "Resultados de la búsqueda por tag (" << resultados.size() << " encontrados):" << endl;
-        mostrarPeliculas(resultados);
+
+        paginacion.push(resultados);
+        return resultados;
     }
 
-    // Función para mostrar las películas más relevantes
-    void mostrarPeliculasRelevantes(int count = 5) const {
-        cout << "Películas más relevantes:" << endl;
-        vector<shared_ptr<Pelicula>> peliculasOrdenadas = peliculas;
-        sort(peliculasOrdenadas.begin(), peliculasOrdenadas.end(), [](const shared_ptr<Pelicula>& a, const shared_ptr<Pelicula>& b) {
-            // Aquí puedes implementar tu propio criterio de relevancia
-            return a->getTitulo() < b->getTitulo();
-        });
-        mostrarPeliculas(peliculasOrdenadas, 0, count);
+    // Función pública para mostrar películas con paginación
+    void mostrarPeliculas(const vector<shared_ptr<Pelicula>>& pelis, int start = 0, int count = 5) const {
+        int end = min(start + count, static_cast<int>(pelis.size()));
+        for (int i = start; i < end; ++i) {
+            cout << setw(3) << i + 1 << ". " << pelis[i]->getTitulo() << endl;
+        }
+        if (end < static_cast<int>(pelis.size())) {
+            cout << "Más resultados disponibles. Ingresa 'm' para ver más o 'q' para salir: ";
+            string input;
+            cin.ignore();
+            getline(cin, input);
+            if (input == "m") {
+                mostrarPeliculas(pelis, start + count, count);
+            }
+        }
     }
 
     // Función para mostrar detalles de una película según su índice
@@ -177,14 +174,9 @@ public:
         }
 
         vector<shared_ptr<Pelicula>> sugerencias;
-        for (const auto& pelicula : peliculas) {
-            if (find(likes.begin(), likes.end(), pelicula) == likes.end()) {
-                for (const auto& tag : pelicula->getTags()) {
-                    if (tagsLiked.find(tag) != tagsLiked.end()) {
-                        sugerencias.push_back(pelicula);
-                        break;
-                    }
-                }
+        for (const auto& [tag, pelicula] : peliculasPorTag) {
+            if (tagsLiked.find(tag) != tagsLiked.end()) {
+                sugerencias.push_back(pelicula);
             }
         }
 
@@ -215,6 +207,55 @@ public:
         cout << "Películas que te gustan:" << endl;
         mostrarPeliculas(likes);
     }
+
+    // Función para guardar y cargar las listas de "Ver más tarde" y "Likes"
+    void cargarEstado(const string& archivo, vector<shared_ptr<Pelicula>>& lista) {
+        ifstream file(archivo);
+        if (!file.is_open()) {
+            cerr << "No se pudo abrir el archivo " << archivo << endl;
+            return;
+        }
+
+        string imdb_id;
+        while (getline(file, imdb_id)) {
+            auto it = find_if(peliculas.begin(), peliculas.end(), [&imdb_id](const shared_ptr<Pelicula>& p) {
+                return p->getImdbId() == imdb_id;
+            });
+            if (it != peliculas.end()) {
+                lista.push_back(*it);
+            }
+        }
+        file.close();
+    }
+
+    void guardarEstado(const string& archivo, const vector<shared_ptr<Pelicula>>& lista) const {
+        ofstream file(archivo);
+        if (!file.is_open()) {
+            cerr << "No se pudo abrir el archivo " << archivo << endl;
+            return;
+        }
+
+        for (const auto& pelicula : lista) {
+            file << pelicula->getImdbId() << endl;
+        }
+        file.close();
+    }
+
+    void cargarVerMasTarde() {
+        cargarEstado("ver_mas_tarde.txt", verMasTarde);
+    }
+
+    void guardarVerMasTarde() const {
+        guardarEstado("ver_mas_tarde.txt", verMasTarde);
+    }
+
+    void cargarLikes() {
+        cargarEstado("likes.txt", likes);
+    }
+
+    void guardarLikes() const {
+        guardarEstado("likes.txt", likes);
+    }
 };
 
 // Función principal para el menú
@@ -238,14 +279,18 @@ void mostrarMenu(Plataforma& plataforma) {
                 string palabra;
                 cin.ignore();
                 getline(cin, palabra);
-                plataforma.buscarPorPalabraOFrase(palabra);
+                auto resultados = plataforma.buscarPorPalabraOFrase(palabra);
+                cout << "Resultados de la búsqueda (" << resultados.size() << " encontrados):" << endl;
+                plataforma.mostrarPeliculas(resultados);
                 break;
             }
             case 2: {
                 cout << "Ingresa una etiqueta (tag) para buscar: ";
                 string tag;
                 cin >> tag;
-                plataforma.buscarPorTag(tag);
+                auto resultados = plataforma.buscarPorTag(tag);
+                cout << "Resultados de la búsqueda por tag (" << resultados.size() << " encontrados):" << endl;
+                plataforma.mostrarPeliculas(resultados);
                 break;
             }
             case 3: {
@@ -278,7 +323,19 @@ void mostrarMenu(Plataforma& plataforma) {
 
 int main() {
     Plataforma plataforma;
-    plataforma.cargarPeliculas("C:/Users/fbver/.vscode/PROYECTO_PROGRA/mpst_full_data.csv");
+    try {
+        plataforma.cargarPeliculas("C:/Users/fbver/Documents/vscode/progra3-proyectofinal/mpst_full_data.csv");
+    } catch (const runtime_error& e) {
+        cerr << e.what() << endl;
+        return 1;
+    }
+
+    plataforma.cargarVerMasTarde();
+    plataforma.cargarLikes();
     mostrarMenu(plataforma);
+    plataforma.guardarVerMasTarde();
+    plataforma.guardarLikes();
+
     return 0;
 }
+
