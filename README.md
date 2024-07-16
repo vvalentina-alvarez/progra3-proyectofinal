@@ -17,3 +17,5 @@ Además, se crea una función "showMenu" fuera de las clases que permite al usua
 En la función principal "main", se utilizan todos los métodos de las clases para construir la plataforma de streaming q utilizará el usuario. Aquí, se llama a la función "mostrarMenu" para que el usuario pueda interactuar con el programa.
 
 El código utiliza varias librerías que permiten manejar diferentes funciones necesitadas para la creación del programa  y hacerlo más optimo.  Se utiliza la librería "fstream" para manejar los archivos, por ejemplo se utiliza para abrir y leer el archivo CSV de la base de datos. Para un acceso más rápido a los elementos, se utilizó las librerías "unordered_map" y "unordered_set". Para poder realizar tareas simultáneamente y de manera concurrente, se consideró oportuno utilizar la librería "threads".
+#Link del video
+https://youtu.be/JjUb3gTqsPw
